@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import threading
+
 import cv2
 import numpy as np
 import torch
@@ -10,6 +12,19 @@ import torchvision.transforms as T
 
 _DEVICE = torch.device("cpu")
 _INPUT_SIZE = 256
+
+_EXTRACTOR: "FeatureExtractor | None" = None
+_EXTRACTOR_LOCK = threading.Lock()
+
+
+def get_extractor() -> "FeatureExtractor":
+    """Единый backbone на процесс: ResNet18 тяжёлый, отдельная копия на каждый
+    object_id раздувает память и время загрузки эталонов."""
+    global _EXTRACTOR
+    with _EXTRACTOR_LOCK:
+        if _EXTRACTOR is None:
+            _EXTRACTOR = FeatureExtractor()
+        return _EXTRACTOR
 
 
 class FeatureExtractor:

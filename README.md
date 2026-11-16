@@ -56,6 +56,7 @@ inspect_detail ──► сегментация ──► выравнивани
 |---|---|---|
 | object_id | form | идентификатор объекта |
 | image | file | фото детали для проверки |
+| debug | form, необязательно | `true` — вернуть дополнительно выровненное фото и эталон (base64) |
 
 Ответ:
 
@@ -68,12 +69,32 @@ inspect_detail ──► сегментация ──► выравнивани
   "image_score": 1.0,
   "defects": [
     {"bbox_xyxy": [347, 107, 386, 157], "area_px": 677,
-     "mean_score": 0.9, "max_score": 1.0, "label": "defect", "severity": "high"}
+     "mean_score": 0.9, "max_score": 1.0, "label": "defect", "severity": "high",
+     "type": "edge_overflow"}
   ],
   "annotated_image_b64": "<PNG с обведёнными дефектами, base64>",
-  "heatmap_b64": "<PNG heatmap, base64>"
+  "heatmap_b64": "<PNG heatmap, base64>",
+  "log": [
+    {"stage": "segmentation", "time_ms": 1800, "mask_px": 69315, "mask_ratio": 0.093},
+    {"stage": "alignment", "reference_idx": 0, "time_ms": 2300, "ok": true,
+     "matches": 80, "inliers": 14, "inlier_ratio": 0.18, "mask_iou": 0.92,
+     "rotation_deg": 30.5, "scale": 1.11},
+    {"stage": "fit_memory_bank", "time_ms": 240, "reference_idx": 0, "bank_patches": 1024},
+    {"stage": "detection", "time_ms": 420, "image_score": 1.0, "defect_count": 5,
+     "defects_by_type": {"edge_overflow": 2, "dark_spot": 3}},
+    {"stage": "total", "time_ms": 4800}
+  ]
 }
 ```
+
+Типы дефектов (`type`): `edge_overflow` — материал за пределами контура детали,
+`line_defect` — вытянутый дефект (царапина/трещина), `dark_spot` / `bright_spot` —
+тёмное/светлое пятно, `anomaly` — прочее.
+
+`log` — поэтапный протокол инспекции: сегментация, выравнивание по каждому эталону
+(совпадения, inliers, IoU масок, поворот, масштаб), сборка банка признаков,
+детекция с разбивкой по типам и общее время. `debug=true` добавляет в ответ
+`aligned_image_b64` и `reference_image_b64`.
 
 Если выровнять не удалось (другая деталь, сильная порча кадра) — `ok: false`
 с пояснением, без 5xx. Ошибки входных данных — 400/404.

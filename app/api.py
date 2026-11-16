@@ -31,6 +31,7 @@ class DefectOut(BaseModel):
     max_score: float
     label: str
     severity: str
+    type: str
 
 
 class AlignmentOut(BaseModel):
@@ -52,6 +53,9 @@ class InspectDetailResponse(BaseModel):
     defects: list[DefectOut] = []
     annotated_image_b64: str | None = None
     heatmap_b64: str | None = None
+    log: list[dict] = []
+    aligned_image_b64: str | None = None
+    reference_image_b64: str | None = None
 
 
 @app.get("/health")
@@ -84,13 +88,18 @@ async def load_reference(
 async def inspect_detail(
     object_id: str = Form(...),
     image: UploadFile = File(...),
+    debug: bool = Form(False),
 ) -> InspectDetailResponse:
-    """Проверяет текущее изображение на дефекты, сравнивая с эталонами object_id."""
+    """Проверяет текущее изображение на дефекты, сравнивая с эталонами object_id.
+
+    debug=true добавляет в ответ выровненное изображение и canvas эталона.
+    В log — тайминги стадий, попытки выравнивания по каждому эталону и сводка.
+    """
     try:
         data = await image.read()
         if not data:
             raise HTTPException(400, "Empty image file")
-        result = service.inspect_detail(object_id, data)
+        result = service.inspect_detail(object_id, data, debug=debug)
         return InspectDetailResponse(
             ok=result.ok,
             message=result.message,
@@ -105,11 +114,15 @@ async def inspect_detail(
                     max_score=d.max_score,
                     label=d.label,
                     severity=d.severity,
+                    type=d.type,
                 )
                 for d in result.defects
             ],
             annotated_image_b64=result.annotated_image_b64,
             heatmap_b64=result.heatmap_b64,
+            log=result.log,
+            aligned_image_b64=result.aligned_image_b64,
+            reference_image_b64=result.reference_image_b64,
         )
     except HTTPException:
         raise
@@ -125,7 +138,6 @@ def delete_object(object_id: str) -> dict:
     if object_id not in service._refs:
         raise HTTPException(404, f"object_id={object_id} not found")
     service._refs.pop(object_id)
-    service._detectors.pop(object_id, None)
     return {"object_id": object_id, "message": "deleted"}
 
 
