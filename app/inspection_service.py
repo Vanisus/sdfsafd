@@ -254,16 +254,10 @@ class InspectionService:
     @staticmethod
     def _draw(image_bgr: np.ndarray, defects: list[DefectCandidate]) -> np.ndarray:
         canvas = image_bgr.copy()
-        h_img, w_img = canvas.shape[:2]
         for d in defects:
             x0, y0, x1, y1 = d.bbox_xyxy
             color = (0, 0, 255) if d.severity == "high" else (0, 165, 255) if d.severity == "medium" else (0, 200, 0)
             cv2.rectangle(canvas, (x0, y0), (x1, y1), color, 2)
-            label = f"{d.type} {d.max_score:.2f}"
-            (tw, th), bl = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-            lx = x0 if x0 + tw + 4 <= w_img else max(0, w_img - tw - 4)
-            ly = y0 - 6 if y0 - th - bl >= 0 else y1 + th + bl + 4
-            cv2.putText(canvas, label, (lx, ly), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1, cv2.LINE_AA)
         return canvas
 
     @staticmethod

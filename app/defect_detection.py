@@ -114,6 +114,20 @@ def structure_diff(
     return np.clip(high / 25.0, 0, 1)
 
 
+def _part_edge_color(reference_bgr: np.ndarray, reference_mask: np.ndarray) -> np.ndarray:
+    """Медианный цвет материала детали в тонкой полосе у эталонного контура.
+
+    Настоящий наплыв/заусенец состоит из материала детали и по цвету близок
+    к её краю. Фон (стол, тень) материалу детали не соответствует.
+    """
+    eroded = cv2.erode(reference_mask, np.ones((21, 21), np.uint8))
+    band = (reference_mask > 0) & (eroded == 0)
+    if band.sum() < 100:
+        band = reference_mask > 0
+    lab = cv2.cvtColor(reference_bgr, cv2.COLOR_BGR2LAB).astype(np.float32)
+    return np.median(lab[band], axis=0)
+
+
 def _classify_defect(
     component_mask: np.ndarray,
     reference_mask: np.ndarray,
@@ -257,6 +271,7 @@ class DefectDetector:
 
         ref_lab = cv2.cvtColor(reference_bgr, cv2.COLOR_BGR2LAB).astype(np.float32)
         cur_lab = cv2.cvtColor(corrected_bgr, cv2.COLOR_BGR2LAB).astype(np.float32)
+        edge_color = _part_edge_color(reference_bgr, reference_mask) if reference_mask is not None else None
 
         count, labels, stats, _ = cv2.connectedComponentsWithStats(binary, connectivity=8)
         boxes: list[DefectCandidate] = []
@@ -273,6 +288,12 @@ class DefectDetector:
                 dtype = _classify_defect(labels == label, reference_mask, ref_lab, cur_lab, bbox)
             else:
                 dtype = "anomaly"
+            if dtype == "edge_overflow" and edge_color is not None:
+                # наплыв должен состоять из материала, похожего на деталь;
+                # всё, что по цвету не похоже на кромку детали (стол, тень, фон) — не дефект
+                comp_med = np.median(cur_lab[labels == label], axis=0)
+                if float(np.sqrt(np.sum((comp_med - edge_color) ** 2))) > 40.0:
+                    continue
             boxes.append(
                 DefectCandidate(
                     bbox_xyxy=bbox,
