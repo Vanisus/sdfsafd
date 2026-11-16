@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 .pytest_cache/
 out/
+result_annotated.png
